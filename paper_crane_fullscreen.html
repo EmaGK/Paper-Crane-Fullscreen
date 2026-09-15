@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Paper Library - Fullscreen</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Garamond', 'Georgia', serif;
+      background: #080605;
+      color: #e6dfd3;
+    }
+
+    /* FULLSCREEN BACKGROUND IMAGE & OVERLAY */
+    #bg-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: linear-gradient(
+          to bottom,
+          rgba(10, 8, 6, 0.75),
+          rgba(15, 12, 10, 0.88)
+        ),
+        url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?q=80&w=2000&auto=format&fit=crop');
+      background-size: cover;
+      background-position: center;
+      z-index: 1;
+    }
+
+    /* ATMOSPHERIC DUST & WATER PARTICLES */
+    .particle {
+      position: absolute;
+      pointer-events: none;
+      animation: fall linear infinite;
+      z-index: 2;
+    }
+
+    .ash {
+      background: rgba(212, 197, 176, 0.3);
+      border-radius: 2px;
+    }
+
+    .water-drop {
+      background: rgba(140, 200, 240, 0.6);
+      border-radius: 50%;
+      box-shadow: 0 0 5px rgba(140, 200, 240, 0.8);
+    }
+
+    @keyframes fall {
+      0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+      20% { opacity: 0.7; }
+      100% { transform: translateY(105vh) rotate(180deg); opacity: 0; }
+    }
+
+    /* FULLSCREEN GLASSMORPHISM INTERFACE CONTAINER */
+    #game-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    #game-container {
+      width: 100%;
+      max-width: 800px;
+      max-height: 92vh;
+      background: rgba(20, 16, 13, 0.85);
+      border: 1px solid #735738;
+      border-radius: 8px;
+      padding: 30px 35px;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), inset 0 0 25px rgba(115, 87, 56, 0.25);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    /* STATS & STATUS BAR */
+    #stats-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px dashed #5c452b;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      color: #d4a359;
+      letter-spacing: 1.5px;
+    }
+
+    .stat-box { text-align: center; }
+    .stat-box:first-child { text-align: left; }
+    .stat-box:last-child { text-align: right; }
+
+    /* PAPER ANIMATION CANVAS / DISPLAY AREA */
+    #paper-stage {
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 10px;
+      perspective: 600px;
+      flex-shrink: 0;
+    }
+
+    #origami-figure {
+      width: 95px;
+      height: 95px;
+      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+
+    /* TRANSFORMATION CSS ANIMATIONS */
+    .folding {
+      animation: foldFlip 0.8s ease-in-out forwards;
+    }
+
+    @keyframes foldFlip {
+      0% { transform: scale(1) rotateY(0deg) rotateX(0deg); }
+      50% { transform: scale(0.2) rotateY(180deg) rotateX(90deg); filter: brightness(1.6); }
+      100% { transform: scale(1) rotateY(360deg) rotateX(0deg); }
+    }
+
+    /* SVG POLYGON TRANSITIONS FOR FORMS */
+    .paper-shape {
+      fill: #e3dad0;
+      stroke: #5c452b;
+      stroke-width: 1.5;
+      transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .paper-fold {
+      fill: #c5b8a9;
+      stroke: #5c452b;
+      stroke-width: 1;
+      transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .paper-ink-trace {
+      fill: none;
+      stroke: #2a3d66;
+      stroke-width: 2;
+      stroke-dasharray: 4, 2;
+      transition: stroke 0.5s ease;
+    }
+
+    /* STORY DISPLAY */
+    #story-text {
+      font-size: 1.2rem;
+      line-height: 1.7;
+      margin-bottom: 22px;
+      min-height: 110px;
+      color: #f0eae1;
+      animation: pageTurn 0.6s ease-out;
+    }
+
+    .ink-bleeding {
+      filter: blur(0.9px);
+      color: #a8a092 !important;
+    }
+
+    @keyframes pageTurn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* CHOICE BUTTONS */
+    #choices {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: auto;
+    }
+
+    .btn {
+      background: rgba(36, 28, 22, 0.9);
+      color: #d4c5b2;
+      border: 1px solid #5c452b;
+      padding: 14px 20px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 1.05rem;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.25s ease;
+    }
+
+    .btn:hover {
+      background: rgba(56, 43, 32, 0.95);
+      border-color: #d4a359;
+      color: #ffffff;
+      padding-left: 28px;
+      box-shadow: -5px 0 0 #d4a359, 0 0 15px rgba(212, 163, 89, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Background & Atmosphere -->
+  <div id="bg-container"></div>
+  <div id="particles"></div>
+
+  <!-- Fullscreen UI Canvas -->
+  <div id="game-wrapper">
+    <div id="game-container">
+      <div id="stats-bar">
+        <div class="stat-box">FORM: <span id="form-val">Crane</span></div>
+        <div class="stat-box">PARCHMENT: <span id="hp-val">100%</span></div>
+        <div class="stat-box">INK MEMORY: <span id="ink-val">100%</span></div>
+      </div>
+
+      <!-- Animated Origami Shape Visualizer -->
+      <div id="paper-stage">
+        <svg id="origami-figure" viewBox="0 0 100 100">
+          <polygon id="wing-left" class="paper-fold" points="50,50 10,20 30,70" />
+          <polygon id="wing-right" class="paper-fold" points="50,50 90,20 70,70" />
+          <polygon id="body-main" class="paper-shape" points="50,15 30,70 50,85 70,70" />
+          <polyline id="ink-line" class="paper-ink-trace" points="50,20 50,80" />
+        </svg>
+      </div>
+
+      <div id="story-text">Unfolding parchment...</div>
+      <div id="choices"></div>
+    </div>
+  </div>
+
+  <script>
+    // Particle Generator
+    const pContainer = document.getElementById('particles');
+    for (let i = 0; i < 35; i++) {
+      const p = document.createElement('div');
+      const isWater = Math.random() > 0.65;
+      p.className = `particle ${isWater ? 'water-drop' : 'ash'}`;
+      const sz = isWater ? Math.random() * 4 + 3 : Math.random() * 5 + 2;
+      p.style.width = `${sz}px`;
+      p.style.height = `${sz}px`;
+      p.style.left = `${Math.random() * 100}vw`;
+      p.style.animationDuration = `${Math.random() * 5 + 4}s`;
+      p.style.animationDelay = `${Math.random() * 5}s`;
+      pContainer.appendChild(p);
+    }
+
+    // GAME STATE
+    let state = {
+      hp: 100,
+      ink: 100,
+      form: 'Crane',
+      hasKey: false,
+      readSecretMap: false
+    };
+
+    // FORM PATH CONFIGURATIONS FOR SVG ANIMATIONS
+    const formShapes = {
+      Crane: {
+        wLeft: "50,50 5,25 30,75",
+        wRight: "50,50 95,25 70,75",
+        body: "50,10 30,75 50,90 70,75",
+        ink: "50,15 50,85"
+      },
+      Dart: {
+        wLeft: "50,50 20,90 45,70",
+        wRight: "50,50 80,90 55,70",
+        body: "50,5 45,70 50,95 55,70",
+        ink: "50,5 50,95"
+      },
+      Boat: {
+        wLeft: "50,45 10,65 50,85",
+        wRight: "50,45 90,65 50,85",
+        body: "50,15 25,65 50,85 75,65",
+        ink: "25,65 75,65"
+      },
+      Shield: {
+        wLeft: "50,50 15,20 20,80",
+        wRight: "50,50 85,20 80,80",
+        body: "50,10 15,20 50,90 85,20",
+        ink: "50,10 50,90"
+      }
+    };
+
+    function updateOrigamiVisual(newForm) {
+      const fig = document.getElementById('origami-figure');
+      const wL = document.getElementById('wing-left');
+      const wR = document.getElementById('wing-right');
+      const body = document.getElementById('body-main');
+      const ink = document.getElementById('ink-line');
+
+      fig.classList.remove('folding');
+      void fig.offsetWidth; 
+      fig.classList.add('folding');
+
+      setTimeout(() => {
+        const config = formShapes[newForm] || formShapes.Crane;
+        wL.setAttribute('points', config.wLeft);
+        wR.setAttribute('points', config.wRight);
+        body.setAttribute('points', config.body);
+        ink.setAttribute('points', config.ink);
+
+        if (state.ink < 40) {
+          ink.style.stroke = "rgba(42, 61, 102, 0.3)";
+        } else {
+          ink.style.stroke = "#2a3d66";
+        }
+      }, 400);
+    }
+
+    function damagePaper(hpLoss, inkLoss) {
+      state.hp = Math.max(0, state.hp - hpLoss);
+      state.ink = Math.max(0, state.ink - inkLoss);
+    }
+
+    function absorbInk(inkGain) {
+      state.ink = Math.min(100, state.ink + inkGain);
+    }
+
+    // STORY DATA
+    const story = {
+      start: {
+        text: "You unfurl your paper wings on the dusty wooden desk. Beside you, the old Archivist coughs weakly, his fingers stained with fresh blue ink. 'The Ministry incinerators start at midnight,' he rasps. 'Fly up... find the Codex Prima... save our history.'",
+        choices: [
+          { 
+            label: "[Form: Crane] Fly directly into the brass ventilation shaft", 
+            target: "vent_shaft",
+            action: () => { setForm("Crane"); }
+          },
+          { 
+            label: "[Refold -> Paper Dart] Shoot under the leaky cellar door", 
+            target: "leaky_hallway",
+            action: () => { setForm("Dart"); }
+          }
+        ]
+      },
+      vent_shaft: {
+        text: "You glide smoothly into the dark brass ducts. Up ahead, a steam pipe has burst! Scalding jet-streams hiss across the shaft while water drips heavy from above.",
+        choices: [
+          { 
+            label: "[Refold -> Paper Shield] Block steam and withstand heat", 
+            target: "steam_passed",
+            action: () => { 
+              setForm("Shield");
+              damagePaper(10, 5); 
+            }
+          },
+          { 
+            label: "Try dodging between falling water droplets as a Crane", 
+            target: "vent_water_damage",
+            action: () => { damagePaper(20, 30); }
+          }
+        ]
+      },
+      steam_passed: {
+        text: "Your reinforced shield folds deflect the scalding steam! Exiting the shaft, you look down into the Overseer's study. A glowing brass key rests on his desk near a bottle of ink.",
+        choices: [
+          { 
+            label: "Dip yourself into the inkwell to restore blurred memories", 
+            target: "inkwell_restored",
+            action: () => { 
+              absorbInk(35); 
+              state.hasKey = true;
+            }
+          },
+          { 
+            label: "Snatch the brass key and soar toward the Vault", 
+            target: "vault_approach",
+            action: () => { 
+              state.hasKey = true; 
+              setForm("Crane");
+            }
+          }
+        ]
+      },
+      vent_water_damage: {
+        text: "WATER BLEED! Cold water drops hit your left wing. Cursive words written across your body blur and run in dark blue streams. You feel your memories fading as the ink drips away...",
+        choices: [
+          { 
+            label: "Hurry into the next room toward dry air", 
+            target: "vault_approach",
+            action: () => { setForm("Crane"); }
+          }
+        ]
+      },
+      inkwell_restored: {
+        text: "You dip your tail into rich ink. Deep stories soak back into your paper fibers! Your wings feel stronger. Snatching the key, you prepare to launch.",
+        choices: [
+          { 
+            label: "[Refold -> Crane] Soar upward to the Grand Vault entrance", 
+            target: "vault_approach",
+            action: () => { setForm("Crane"); }
+          }
+        ]
+      },
+      leaky_hallway: {
+        text: "Shooting through the doorway as a Paper Dart, you hit a sudden spray of leaking water! The dampness softens your tip, causing the ink on your nose to bleed.",
+        choices: [
+          { 
+            label: "Land on a dry ledger to soak up spare ink", 
+            target: "ledger_restored",
+            action: () => { 
+              damagePaper(5, 10); 
+              absorbInk(20); 
+              state.readSecretMap = true;
+            }
+          },
+          { 
+            label: "[Refold -> Origami Boat] Float down the flooded drain", 
+            target: "flooded_sewer",
+            action: () => { 
+              damagePaper(10, 15); 
+              setForm("Boat"); 
+            }
+          }
+        ]
+      },
+      ledger_restored: {
+        text: "Pressing your wet folds against the ancient ledger, fresh pigment transfers to your paper! You also read a hidden blueprint: 'Emergency Vault Vent Port: Behind Incinerator.'",
+        choices: [
+          { 
+            label: "[Refold -> Origami Boat] Plunge into the sewer pipe", 
+            target: "flooded_sewer",
+            action: () => { setForm("Boat"); }
+          }
+        ]
+      },
+      flooded_sewer: {
+        text: "As an Origami Boat, you ride the rushing wastewater channel. The current is fast! Water laps at your paper hull, causing your lower seams to soften.",
+        choices: [
+          { 
+            label: "Steer close to the warm furnace wall to dry your soaked parchment", 
+            target: "furnace_dry",
+            action: () => { damagePaper(15, 0); }
+          },
+          { 
+            label: "[Refold -> Crane] Launch upward out of the sewer", 
+            target: "vault_approach",
+            action: () => { 
+              setForm("Crane"); 
+              damagePaper(5, 10);
+            }
+          }
+        ]
+      },
+      furnace_dry: {
+        text: "The furnace warmth bakes your wet parchment dry! Your paper hardens, fixing your remaining ink permanently into place.",
+        choices: [
+          { 
+            label: "[Refold -> Crane] Fly into the Vault Chamber", 
+            target: "vault_approach",
+            action: () => { setForm("Crane"); }
+          }
+        ]
+      },
+      vault_approach: {
+        text: () => {
+          if (state.hp <= 0 || state.ink <= 0) {
+            return "FAILURE: Water damage and ink loss have washed your parchment blank. You collapse into a soggy, plain sheet of paper on the floor...";
+          }
+          let msg = "You enter the Vault Chamber. High above stands the monumental vault containing the Codex Prima. Sparks and smoke fill the air! ";
+          if (state.ink < 40) msg += "WARNING: Your ink memory is almost entirely washed away!";
+          return msg;
+        },
+        choices: () => {
+          if (state.hp <= 0 || state.ink <= 0) return [{ label: "Restart Game", target: "restart" }];
+          let opts = [];
+          if (state.hasKey) {
+            opts.push({ label: "Use the Brass Key to open the Vault", target: "ending_key_success" });
+          }
+          if (state.readSecretMap) {
+            opts.push({ label: "[Secret Blueprint] Slip through hidden furnace vent", target: "ending_secret_success" });
+          }
+          opts.push({ 
+            label: "[Refold -> Paper Dart] Ram into the gear locks to force open", 
+            target: "ending_sacrifice",
+            action: () => { damagePaper(60, 0); setForm("Dart"); }
+          });
+          return opts;
+        }
+      },
+      ending_key_success: {
+        text: "The key turns! The vault opens, revealing the Codex Prima. You land on its golden cover, merging your ink with its ancient magic before soaring out into the starry night air!",
+        choices: [{ label: "Play Again", target: "restart" }]
+      },
+      ending_secret_success: {
+        text: "Using the secret blueprint, you slip through the hidden vent port directly inside the vault! You absorb its lore and carry the Codex Prima out into the open sky.",
+        choices: [{ label: "Play Again", target: "restart" }]
+      },
+      ending_sacrifice: {
+        text: "You jam your pointed dart-body into the iron gears. Sparks fly as your paper tears, but the lock shatters! Weakened, you land on the Codex Prima as the Archivist retrieves it. Your stories live on.",
+        choices: [{ label: "Try Again", target: "restart" }]
+      }
+    };
+
+    function setForm(newForm) {
+      state.form = newForm;
+      updateOrigamiVisual(newForm);
+    }
+
+    function updateUI() {
+      document.getElementById('hp-val').innerText = `${state.hp}%`;
+      document.getElementById('ink-val').innerText = `${state.ink}%`;
+      document.getElementById('form-val').innerText = state.form;
+
+      const storyEl = document.getElementById('story-text');
+      if (state.ink <= 40) storyEl.classList.add('ink-bleeding');
+      else storyEl.classList.remove('ink-bleeding');
+    }
+
+    function renderNode(key) {
+      if (key === 'restart') {
+        state.hp = 100;
+        state.ink = 100;
+        state.hasKey = false;
+        state.readSecretMap = false;
+        setForm('Crane');
+        key = 'start';
+      }
+
+      updateUI();
+      const node = story[key];
+      const storyEl = document.getElementById('story-text');
+      const choicesEl = document.getElementById('choices');
+
+      storyEl.style.animation = 'none';
+      storyEl.offsetHeight;
+      storyEl.style.animation = 'pageTurn 0.6s ease-out';
+
+      storyEl.innerText = typeof node.text === 'function' ? node.text() : node.text;
+      choicesEl.innerHTML = '';
+
+      const options = typeof node.choices === 'function' ? node.choices() : node.choices;
+      options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.innerText = opt.label;
+        btn.onclick = () => {
+          if (opt.action) opt.action();
+          renderNode(opt.target);
+        };
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    updateOrigamiVisual('Crane');
+    renderNode('start');
+  </script>
+</body>
+</html>
